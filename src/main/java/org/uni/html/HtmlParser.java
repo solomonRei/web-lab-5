@@ -1,82 +1,76 @@
 package org.uni.html;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class HtmlParser {
-    public String removeHtmlTags(String html) {
-        String noHtml = html.replaceAll("<[^>]*>", "");
+    private static final Map<String, String> HTML_ENTITIES = new HashMap<>();
 
-        noHtml = noHtml.replaceAll("&amp;", "&")
-                .replaceAll("&lt;", "<")
-                .replaceAll("&gt;", ">")
-                .replaceAll("&quot;", "\"")
-                .replaceAll("&nbsp;", " ")
-                .replaceAll("&#39;", "'");
-
-        noHtml = noHtml.replaceAll("\\s+", " ").trim();
-
-        return noHtml;
-    }
-
-    public List<String> parseSearchResults(String html) {
-        List<String> results = new ArrayList<>();
-
-        int bodyStart = html.indexOf("\r\n\r\n");
-        if (bodyStart != -1) {
-            html = html.substring(bodyStart + 4);
-        }
-
-        Pattern pattern = Pattern.compile("<h2[^>]*>(.*?)</h2>", Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(html);
-
-        while (matcher.find()) {
-            String result = removeHtmlTags(matcher.group(1));
-            if (!result.trim().isEmpty() && !result.equals("Web")) {
-                results.add(result.trim());
-            }
-        }
-
-        if (results.isEmpty()) {
-            pattern = Pattern.compile("<a[^>]*>(.*?)</a>", Pattern.DOTALL);
-            matcher = pattern.matcher(html);
-
-            while (matcher.find()) {
-                String result = removeHtmlTags(matcher.group(1));
-                if (!result.trim().isEmpty() && result.length() > 5) {
-                    results.add(result.trim());
-                }
-            }
-        }
-
-        return results;
+    static {
+        HTML_ENTITIES.put("&amp;", "&");
+        HTML_ENTITIES.put("&lt;", "<");
+        HTML_ENTITIES.put("&gt;", ">");
+        HTML_ENTITIES.put("&quot;", "\"");
+        HTML_ENTITIES.put("&nbsp;", " ");
+        HTML_ENTITIES.put("&#39;", "'");
+        HTML_ENTITIES.put("&apos;", "'");
+        HTML_ENTITIES.put("&copy;", "©");
+        HTML_ENTITIES.put("&reg;", "®");
+        HTML_ENTITIES.put("&trade;", "™");
+        HTML_ENTITIES.put("&mdash;", "—");
+        HTML_ENTITIES.put("&ndash;", "–");
+        HTML_ENTITIES.put("&hellip;", "…");
     }
 
     public String parseHttpResponse(String response) {
-        int bodyStart = response.indexOf("\r\n\r\n");
-        if (bodyStart != -1) {
-            String headers = response.substring(0, bodyStart);
-            String body = response.substring(bodyStart + 4);
-
-            String[] headerLines = headers.split("\r\n");
-            StringBuilder result = new StringBuilder();
-            
-            if (headerLines.length > 0) {
-                result.append("Status: ").append(headerLines[0]).append("\n\n");
-                result.append("Response Headers:\n");
-                for (int i = 1; i < headerLines.length; i++) {
-                    result.append("  ").append(headerLines[i]).append("\n");
-                }
-            }
-
-            result.append("\nResponse Body:\n");
-            result.append(removeHtmlTags(body));
-            
-            return result.toString();
-        } else {
-            return removeHtmlTags(response);
+        String[] parts = response.split("\r?\n\r?\n", 2);
+        if (parts.length < 2) {
+            return response;
         }
+
+        String headers = parts[0];
+        String body = parts[1];
+
+        StringBuilder formattedResponse = new StringBuilder();
+        formattedResponse.append("\u001B[1m=== Headers ===\u001B[0m\n");
+        for (String header : headers.split("\r?\n")) {
+            formattedResponse.append(header).append("\n");
+        }
+
+        formattedResponse.append("\n\u001B[1m=== Body ===\u001B[0m\n");
+        String text = body
+                .replaceAll("<script[^>]*>.*?</script>", "")
+                .replaceAll("<style[^>]*>.*?</style>", "")
+                .replaceAll("</(p|div|section|article|header|footer|nav|main)>", "\n")
+                .replaceAll("<h([1-6])[^>]*>(.*?)</h\\1>", "\n\u001B[1m$2\u001B[0m\n")
+                .replaceAll("<ul[^>]*>", "\n")
+                .replaceAll("<ol[^>]*>", "\n")
+                .replaceAll("<li[^>]*>", "• ")
+                .replaceAll("<strong[^>]*>(.*?)</strong>", "\u001B[1m$1\u001B[0m")
+                .replaceAll("<em[^>]*>(.*?)</em>", "\u001B[3m$1\u001B[0m")
+                .replaceAll("<[^>]+>", "");
+
+        for (Map.Entry<String, String> entry : HTML_ENTITIES.entrySet()) {
+            text = text.replace(entry.getKey(), entry.getValue());
+        }
+
+        text = text
+                .replaceAll("\\s+", " ")
+                .replaceAll("\\n\\s*\\n+", "\n\n")
+                .trim();
+
+        Pattern linkPattern = Pattern.compile("https?://[^\\s]+");
+        Matcher matcher = linkPattern.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String url = matcher.group();
+            matcher.appendReplacement(sb, "\u001B[34m" + url + "\u001B[0m");
+        }
+        matcher.appendTail(sb);
+
+        formattedResponse.append(sb.toString());
+        return formattedResponse.toString();
     }
 } 
