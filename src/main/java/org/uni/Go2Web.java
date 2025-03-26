@@ -5,6 +5,12 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Go2Web {
 
@@ -30,6 +36,9 @@ public class Go2Web {
                 switch (option) {
                     case "-u":
                         makeHttpRequest(value);
+                        break;
+                    case "-s":
+                        searchWeb(value);
                         break;
                     default:
                         System.out.println("Unknown option: " + option);
@@ -110,6 +119,79 @@ public class Go2Web {
         }
     }
 
+    private static void searchWeb(String searchTerm) throws Exception {
+        String encodedSearchTerm = URLEncoder.encode(searchTerm, StandardCharsets.UTF_8);
+        String searchUrl = "http://www.bing.com/search?q=" + encodedSearchTerm;
+
+        URL url = new URL(searchUrl);
+        String host = url.getHost();
+        int port = 80; // HTTP port
+        String path = url.getPath() + "?" + url.getQuery();
+
+        try (Socket socket = new Socket(host, port)) {
+            PrintWriter out = new PrintWriter(socket.getOutputStream());
+            out.print("GET " + path + " HTTP/1.1\r\n");
+            out.print("Host: " + host + "\r\n");
+            out.print("Connection: close\r\n");
+            out.print("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) org.uni.Go2Web/1.0\r\n");
+            out.print("Accept-Language: en-US,en;q=0.9\r\n");
+            out.print("\r\n");
+            out.flush();
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = in.readLine()) != null) {
+                response.append(line).append("\n");
+            }
+
+            String responseString = response.toString();
+            List<String> searchResults = parseSearchResults(responseString);
+
+            System.out.println("Top results for: " + searchTerm);
+            int count = 0;
+            for (String result : searchResults) {
+                if (count++ < 10) {
+                    System.out.println((count) + ". " + result);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static List<String> parseSearchResults(String html) {
+        List<String> results = new ArrayList<>();
+
+        int bodyStart = html.indexOf("\r\n\r\n");
+        if (bodyStart != -1) {
+            html = html.substring(bodyStart + 4);
+        }
+
+        Pattern pattern = Pattern.compile("<h2[^>]*>(.*?)</h2>", Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(html);
+
+        while (matcher.find()) {
+            String result = removeHtmlTags(matcher.group(1));
+            if (!result.trim().isEmpty() && !result.equals("Web")) {
+                results.add(result.trim());
+            }
+        }
+
+        if (results.isEmpty()) {
+            pattern = Pattern.compile("<a[^>]*>(.*?)</a>", Pattern.DOTALL);
+            matcher = pattern.matcher(html);
+
+            while (matcher.find()) {
+                String result = removeHtmlTags(matcher.group(1));
+                if (!result.trim().isEmpty() && result.length() > 5) {
+                    results.add(result.trim());
+                }
+            }
+        }
+
+        return results;
+    }
 
     private static String removeHtmlTags(String html) {
         String noHtml = html.replaceAll("<[^>]*>", "");
