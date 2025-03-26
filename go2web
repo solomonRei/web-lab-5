@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cd "$(dirname "$0")"
+mkdir -p target/classes/org/uni
+
+if [ ! -f "target/classes/org/uni/Go2Web.class" ] || [ "src/main/java/org/uni/Go2Web.java" -nt "target/classes/org/uni/Go2Web.class" ]; then
+    echo "Compiling Java code..."
+    javac -d target/classes src/main/java/org/uni/Go2Web.java
+fi
+
+java -cp target/classes org.uni.Go2Web "$@"
