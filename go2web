@@ -2,16 +2,26 @@
 
 cd "$(dirname "$0")"
 
+# Download JSON library if not present
+JSON_LIB="target/lib/json-20231013.jar"
+if [ ! -f "$JSON_LIB" ]; then
+    echo "Downloading JSON library..."
+    mkdir -p target/lib
+    curl -L "https://repo1.maven.org/maven2/org/json/json/20231013/json-20231013.jar" -o "$JSON_LIB"
+fi
+
 mkdir -p target/classes/org/uni
 
 # Compile if needed
 if [ ! -f "target/classes/org/uni/Go2Web.class" ] || [ "src/main/java/org/uni/Go2Web.java" -nt "target/classes/org/uni/Go2Web.class" ]; then
     echo "Compiling Java code..."
-    javac -d target/classes src/main/java/org/uni/Go2Web.java \
+    javac -cp "$JSON_LIB" -d target/classes src/main/java/org/uni/Go2Web.java \
         src/main/java/org/uni/http/HttpClient.java \
+        src/main/java/org/uni/http/CacheEntry.java \
+        src/main/java/org/uni/http/CacheManager.java \
         src/main/java/org/uni/html/HtmlParser.java \
         src/main/java/org/uni/search/SearchService.java
 fi
 
 # Run the application
-java -cp target/classes org.uni.Go2Web "$@"
+java -cp "target/classes:$JSON_LIB" org.uni.Go2Web "$@"

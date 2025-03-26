@@ -31,8 +31,19 @@ public class Go2Web {
         if (args.length >= 2) {
             String option = args[0];
             StringBuilder valueBuilder = new StringBuilder(args[1]);
+            String format = "html";
 
-            if (option.equals("-s") && args.length > 2) {
+            // Check for format option
+            if (args.length > 2 && args[args.length - 2].equals("-f")) {
+                format = args[args.length - 1];
+                // Remove format arguments from search term if present
+                if (option.equals("-s")) {
+                    int newLength = args.length - 2;
+                    for (int i = 2; i < newLength; i++) {
+                        valueBuilder.append(" ").append(args[i]);
+                    }
+                }
+            } else if (option.equals("-s") && args.length > 2) {
                 for (int i = 2; i < args.length; i++) {
                     valueBuilder.append(" ").append(args[i]);
                 }
@@ -43,7 +54,7 @@ public class Go2Web {
             try {
                 switch (option) {
                     case "-u":
-                        makeHttpRequest(value);
+                        makeHttpRequest(value, format);
                         break;
                     case "-s":
                         searchWeb(value);
@@ -63,13 +74,20 @@ public class Go2Web {
 
     private void printHelp() {
         System.out.println("Usage:");
-        System.out.println("  go2web -u <URL>         # make an HTTP request to the specified URL and print the response");
-        System.out.println("  go2web -s <search-term> # make an HTTP request to search the term using Bing and print top 10 results");
-        System.out.println("  go2web -h               # show this help");
+        System.out.println("  go2web -u <URL> [-f <format>]      # make an HTTP request to the specified URL and print the response");
+        System.out.println("  go2web -s <search-term>            # make an HTTP request to search the term using Bing and print top 10 results");
+        System.out.println("  go2web -h                          # show this help");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  -f <format>    # specify response format: html (default) or json");
     }
 
-    private void makeHttpRequest(String urlString) throws Exception {
-        String response = httpClient.makeRequest(urlString);
+    private void makeHttpRequest(String urlString, String format) throws Exception {
+        String acceptHeader = format.equalsIgnoreCase("json") 
+            ? "application/json,text/html;q=0.9,*/*;q=0.8"
+            : "text/html,application/json;q=0.9,*/*;q=0.8";
+            
+        String response = httpClient.makeRequest(urlString, acceptHeader);
         System.out.println(htmlParser.parseHttpResponse(response));
     }
 
