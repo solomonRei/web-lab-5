@@ -2,6 +2,7 @@ package org.uni.search;
 
 import org.uni.http.HttpClient;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -9,34 +10,45 @@ import java.util.regex.Pattern;
 
 public class SearchService {
     private final HttpClient httpClient;
-    private static final String BING_SEARCH_URL = "http://www.bing.com/search?q=";
+    private static final String BING_SEARCH_URL = "https://www.bing.com/search?q=";
     private static final Pattern[] SEARCH_PATTERNS = {
-            Pattern.compile("<h2[^>]*>\\s*<a[^>]*href=\"([^\"]+)\"[^>]*>([^<]+)</a>"),
-            Pattern.compile("<div class=\"b_title\">\\s*<h2>\\s*<a[^>]*href=\"([^\"]+)\"[^>]*>([^<]+)</a>"),
-            Pattern.compile("<a[^>]*href=\"([^\"]+)\"[^>]*title=\"([^\"]+)\"")
+            Pattern.compile("<li class=\"b_algo\"[^>]*>.*?<h2><a href=\"([^\"]+)\"[^>]*>(.*?)</a></h2>", Pattern.DOTALL),
+            Pattern.compile("<h2><a href=\"([^\"]+)\"[^>]*>(.*?)</a></h2>", Pattern.DOTALL),
+            Pattern.compile("<a href=\"([^\"]+)\"[^>]*>(.*?)</a>", Pattern.DOTALL)
     };
 
     public SearchService() {
-        this.httpClient = new HttpClient();
+        this.httpClient = new HttpClient(true);
     }
 
-    public List<String> search(String searchTerm) throws Exception {
-        if (searchTerm == null || searchTerm.trim().isEmpty()) {
-            throw new IllegalArgumentException("Search term cannot be empty");
+    public List<String> search(String query) throws IOException {
+        HttpClient httpClient = new HttpClient(true);
+        String encodedQuery = httpClient.encodeUrl(query);
+        String searchUrl = String.format("https://www.bing.com/search?q=%s", encodedQuery);
+        
+        String response = httpClient.makeSocketRequest(searchUrl, "text/html");
+        
+        List<String> results = extractSearchResults(response);
+        if (results.isEmpty()) {
+            throw new IOException("No search results found. Please try a different search term.");
         }
+        
+        return results;
+    }
 
-        String encodedSearchTerm = httpClient.encodeUrl(searchTerm);
-        String response = httpClient.makeRequest(BING_SEARCH_URL + encodedSearchTerm);
+    private List<String> extractSearchResults(String response) {
         List<String> results = new ArrayList<>();
 
         for (Pattern pattern : SEARCH_PATTERNS) {
             Matcher matcher = pattern.matcher(response);
             while (matcher.find() && results.size() < 10) {
-                String url = matcher.group(1);
-                String title = matcher.group(2).replaceAll("<[^>]+>", "").trim();
+                if (matcher.groupCount() >= 2) {
+                    String href = matcher.group(1);
+                    String title = matcher.group(2).replaceAll("<[^>]+>", "").trim();
 
-                if (isValidUrl(url) && !title.isEmpty() && !title.equals("Web")) {
-                    results.add("\u001B[34m" + url + "\u001B[0m" + " - " + title);
+                    if (isValidUrl(href) && !title.isEmpty() && !title.equals("Web")) {
+                        results.add(href + " - " + title);
+                    }
                 }
             }
 
@@ -46,25 +58,22 @@ public class SearchService {
         }
 
         if (results.isEmpty()) {
-            throw new Exception("No search results found. The search engine might have blocked the request.");
+            Pattern urlPattern = Pattern.compile("https?://[^\\s\"><]+");
+            Matcher urlMatcher = urlPattern.matcher(response);
+            int count = 0;
+            while (urlMatcher.find() && count < 10) {
+                String url2 = urlMatcher.group();
+                if (isValidUrl(url2) && !url2.contains("bing.com") && !url2.contains("microsoft.com")) {
+                    results.add(url2);
+                    count++;
+                }
+            }
         }
 
         return results;
     }
 
     private boolean isValidUrl(String url) {
-        if (url == null || url.trim().isEmpty()) {
-            return false;
-        }
-
-        try {
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                url = "http://" + url;
-            }
-            new java.net.URL(url);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
     }
 } 

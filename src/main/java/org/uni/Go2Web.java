@@ -12,7 +12,7 @@ public class Go2Web {
     private final SearchService searchService;
 
     public Go2Web() {
-        this.httpClient = new HttpClient();
+        this.httpClient = new HttpClient(true);
         this.htmlParser = new HtmlParser();
         this.searchService = new SearchService();
     }
@@ -22,86 +22,97 @@ public class Go2Web {
         go2web.run(args);
     }
 
-    private void run(String[] args) {
-        if (args.length == 0 || (args.length == 1 && args[0].equals("-h"))) {
+    public void run(String[] args) {
+        if (args.length == 0) {
             printHelp();
             return;
         }
 
-        if (args.length >= 2) {
-            String option = args[0];
-            StringBuilder valueBuilder = new StringBuilder(args[1]);
-            String format = "html";
-
-            // Check for format option
-            if (args.length > 2 && args[args.length - 2].equals("-f")) {
-                format = args[args.length - 1];
-                // Remove format arguments from search term if present
-                if (option.equals("-s")) {
-                    int newLength = args.length - 2;
-                    for (int i = 2; i < newLength; i++) {
-                        valueBuilder.append(" ").append(args[i]);
+        String command = args[0];
+        switch (command) {
+            case "-u":
+                if (args.length < 2) {
+                    System.out.println("Error: URL is required");
+                    printHelp();
+                    return;
+                }
+                String url = args[1];
+                String format = "auto";
+                if (args.length >= 4 && args[2].equals("-f")) {
+                    format = args[3];
+                }
+                
+                try {
+                    String acceptHeader;
+                    switch (format) {
+                        case "json":
+                            acceptHeader = "application/json";
+                            break;
+                        case "html":
+                            acceptHeader = "text/html; charset=UTF-8";
+                            break;
+                        case "auto":
+                        default:
+                            // For auto-detect, accept both HTML and JSON
+                            acceptHeader = "text/html,application/json;q=0.9";
+                            break;
                     }
+                    
+                    // Use the new socket-based request method
+                    String response = httpClient.makeSocketRequest(url, acceptHeader);
+                    System.out.println(response);
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    e.printStackTrace();
                 }
-            } else if (option.equals("-s") && args.length > 2) {
-                for (int i = 2; i < args.length; i++) {
-                    valueBuilder.append(" ").append(args[i]);
+                break;
+            case "-s":
+                if (args.length < 2) {
+                    System.out.println("Error: Search term is required");
+                    printHelp();
+                    return;
                 }
-            }
-
-            String value = valueBuilder.toString();
-
-            try {
-                switch (option) {
-                    case "-u":
-                        makeHttpRequest(value, format);
-                        break;
-                    case "-s":
-                        searchWeb(value);
-                        break;
-                    default:
-                        System.out.println("Unknown option: " + option);
-                        printHelp();
+                String searchTerm = args[1];
+                String searchFormat = "html";
+                if (args.length >= 4 && args[2].equals("-f")) {
+                    searchFormat = args[3];
                 }
-            } catch (Exception e) {
-                System.err.println("Error: " + e.getMessage());
-                e.printStackTrace();
-            }
-        } else {
-            printHelp();
+                try {
+                    List<String> results = searchService.search(searchTerm);
+                    for (String result : results) {
+                        System.out.println(result);
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    e.printStackTrace();
+                }
+                break;
+            case "-h":
+                printHelp();
+                break;
+            default:
+                System.out.println("Error: Unknown command");
+                printHelp();
         }
     }
 
     private void printHelp() {
-        System.out.println("Usage:");
-        System.out.println("  go2web -u <URL> [-f <format>]      # make an HTTP request to the specified URL and print the response");
-        System.out.println("  go2web -s <search-term>            # make an HTTP request to search the term using Bing and print top 10 results");
-        System.out.println("  go2web -h                          # show this help");
-        System.out.println();
-        System.out.println("Options:");
-        System.out.println("  -f <format>    # specify response format: html (default) or json");
-    }
-
-    private void makeHttpRequest(String urlString, String format) throws Exception {
-        String acceptHeader = format.equalsIgnoreCase("json") 
-            ? "application/json,text/html;q=0.9,*/*;q=0.8"
-            : "text/html,application/json;q=0.9,*/*;q=0.8";
-            
-        String response = httpClient.makeRequest(urlString, acceptHeader);
-        System.out.println(htmlParser.parseHttpResponse(response));
-    }
-
-    private void searchWeb(String searchTerm) throws Exception {
-        List<String> searchResults = searchService.search(searchTerm);
-
-        System.out.println("Top results for: " + searchTerm);
-        int count = 0;
-        for (String result : searchResults) {
-            if (count++ < 10) {
-                System.out.println((count) + ". " + result);
-            } else {
-                break;
-            }
-        }
+        System.out.println("Go2Web - HTTP Client with caching and content negotiation");
+        System.out.println("\nUsage:");
+        System.out.println("  go2web -u <URL> [-f <format>]  Make an HTTP request to the specified URL");
+        System.out.println("  go2web -s <search term>        Search the web");
+        System.out.println("  go2web -h                      Show this help message");
+        System.out.println("\nFormat options:");
+        System.out.println("  auto (default)                Automatically detect format from response");
+        System.out.println("                                (Using Content-Type header and content structure)");
+        System.out.println("  html                         Format response as HTML");
+        System.out.println("  json                         Format response as JSON");
+        System.out.println("\nFeatures:");
+        System.out.println("  - Content negotiation (JSON/HTML)");
+        System.out.println("  - HTTP caching with ETag support");
+        System.out.println("  - Redirect handling");
+        System.out.println("  - Socket-based connections with automatic SSL detection");
+        System.out.println("  - Uses port 443 or HTTPS protocol for SSL connections");
+        System.out.println("  - Web search with Bing");
     }
 } 

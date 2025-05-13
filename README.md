@@ -104,3 +104,9 @@ Supports multiple content types:
 ## Cache Location
 
 The file-based cache is stored in `~/.go2web_cache`. You can safely delete this directory to clear the cache. 
+
+
+./go2web -u https://api.github.com/users/octocat -f json
+./go2web -u https://example.com
+./go2web -s "Java programming"
+./go2web -h
