@@ -5,22 +5,18 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.uni.html.HtmlParser;
 
+import javax.net.ssl.SSLSocketFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
 
 public class HttpClient {
     private static final int MAX_REDIRECTS = 5;
@@ -32,120 +28,6 @@ public class HttpClient {
 
     public HttpClient(boolean useFileCache) {
         this.cacheManager = new CacheManager(useFileCache);
-    }
-
-    public String makeRequest(String urlString, String acceptHeader) throws IOException {
-        if (redirectCount >= MAX_REDIRECTS) {
-            throw new IOException("Too many redirects");
-        }
-
-        URL url = new URL(urlString);
-        String host = url.getHost();
-        int port = url.getPort();
-        boolean isSecure = urlString.startsWith("https://");
-
-        if (port == -1) {
-            port = isSecure ? DEFAULT_HTTPS_PORT : DEFAULT_HTTP_PORT;
-        } else {
-            isSecure = (port == DEFAULT_HTTPS_PORT);
-        }
-
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-        conn.setInstanceFollowRedirects(false);
-        conn.setRequestProperty("Accept", acceptHeader);
-
-        if (urlString.contains("bing.com") || urlString.contains("google.com")) {
-            conn.setRequestProperty("User-Agent", USER_AGENT);
-            conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
-            conn.setRequestProperty("Referer", "https://www.google.com/");
-        } else {
-            conn.setRequestProperty("User-Agent", "Go2Web/1.0");
-        }
-
-        CacheEntry cachedEntry = cacheManager.get(urlString);
-        if (cachedEntry != null && !cachedEntry.isExpired()) {
-            conn.setRequestProperty("If-None-Match", cachedEntry.getEtag());
-        }
-
-        int responseCode = conn.getResponseCode();
-
-        if (responseCode >= 300 && responseCode < 400) {
-            String location = conn.getHeaderField("Location");
-            if (location != null) {
-                if (!location.startsWith("http")) {
-                    if (location.startsWith("/")) {
-                        String baseUrl = url.getProtocol() + "://" + url.getHost();
-                        location = baseUrl + location;
-                    } else {
-                        String path = url.getPath();
-                        if (path.lastIndexOf('/') > 0) {
-                            String baseUrl = url.getProtocol() + "://" + url.getHost() + path.substring(0, path.lastIndexOf('/') + 1);
-                            location = baseUrl + location;
-                        } else {
-                            String baseUrl = url.getProtocol() + "://" + url.getHost() + "/";
-                            location = baseUrl + location;
-                        }
-                    }
-                }
-                redirectCount++;
-                return makeRequest(location, acceptHeader);
-            }
-        }
-
-        if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED && cachedEntry != null && !cachedEntry.isExpired()) {
-            return cachedEntry.getContent();
-        }
-
-        String content;
-        String contentType = conn.getContentType();
-        String etag = conn.getHeaderField("ETag");
-
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(responseCode >= 400 ? conn.getErrorStream() : conn.getInputStream(), StandardCharsets.UTF_8))) {
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line).append("\n");
-            }
-            content = response.toString();
-        }
-
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            int cacheTime = 3600;
-            CacheEntry entry = new CacheEntry(content, contentType, etag, cacheTime);
-            cacheManager.put(urlString, entry);
-        }
-
-        if (isSearchRequest(urlString)) {
-            return content;
-        }
-
-        boolean jsonRequested = acceptHeader.contains("application/json") && !acceptHeader.contains("text/html");
-        boolean htmlRequested = acceptHeader.contains("text/html") && !acceptHeader.contains("application/json");
-
-        if ((contentType != null && contentType.contains("application/json")) ||
-                (jsonRequested || (!htmlRequested && isJsonResponse(content)))) {
-            try {
-                if (content.startsWith("[")) {
-                    JSONArray jsonArray = new JSONArray(content);
-                    return jsonArray.toString(2);
-                } else if (content.startsWith("{")) {
-                    JSONObject jsonObject = new JSONObject(content);
-                    return jsonObject.toString(2);
-                }
-            } catch (JSONException e) {
-
-            }
-        }
-
-        if (!isSearchRequest(urlString) &&
-                ((contentType != null && contentType.contains("text/html")) ||
-                        (htmlRequested || (!jsonRequested && isHtmlResponse(content))))) {
-            return HtmlParser.parseHttpResponse(conn, content);
-        }
-
-        return content;
     }
 
     public String makeSocketRequest(String urlString, String acceptHeader) throws IOException {
@@ -172,7 +54,7 @@ public class HttpClient {
 
         Socket socket = null;
         StringBuilder responseBuilder = new StringBuilder();
-        
+
         try {
             if (port == DEFAULT_HTTPS_PORT || urlString.startsWith("https://")) {
                 SSLSocketFactory sslSocketFactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
@@ -186,7 +68,7 @@ public class HttpClient {
             requestBuilder.append("Host: ").append(host).append("\r\n");
             requestBuilder.append("Connection: close\r\n");
             requestBuilder.append("Accept: ").append(acceptHeader).append("\r\n");
-            
+
             if (urlString.contains("bing.com") || urlString.contains("google.com")) {
                 requestBuilder.append("User-Agent: ").append(USER_AGENT).append("\r\n");
                 requestBuilder.append("Accept-Language: en-US,en;q=0.9\r\n");
@@ -194,7 +76,7 @@ public class HttpClient {
             } else {
                 requestBuilder.append("User-Agent: Go2Web/1.0\r\n");
             }
-            
+
             if (cachedEntry != null && cachedEntry.getEtag() != null) {
                 requestBuilder.append("If-None-Match: ").append(cachedEntry.getEtag()).append("\r\n");
             }
@@ -218,13 +100,8 @@ public class HttpClient {
                 }
             }
         }
-        
+
         String fullResponse = responseBuilder.toString();
-
-        if (fullResponse.isEmpty()) {
-            return makeRequest(urlString, acceptHeader);
-        }
-
         String[] parts = fullResponse.split("\r?\n\r?\n", 2);
         String headers = parts[0];
         String body = parts.length > 1 ? parts[1] : "";
@@ -234,7 +111,7 @@ public class HttpClient {
         try {
             statusCode = Integer.parseInt(statusLine.split(" ", 3)[1]);
         } catch (Exception e) {
-            return makeRequest(urlString, acceptHeader);
+            throw new RuntimeException("Error");
         }
 
         if (statusCode == 304 && cachedEntry != null && !cachedEntry.isExpired()) {
@@ -250,7 +127,7 @@ public class HttpClient {
                     break;
                 }
             }
-            
+
             if (location != null) {
                 if (!location.startsWith("http")) {
                     if (location.startsWith("/")) {
@@ -275,7 +152,7 @@ public class HttpClient {
 
         String contentType = null;
         String etag = null;
-        
+
         if (statusCode == 200) {
             String[] headerLines = headers.split("\r?\n");
             for (String header : headerLines) {
@@ -297,10 +174,10 @@ public class HttpClient {
         if (isSearchRequest(urlString)) {
             return body;
         }
-        
+
         boolean jsonRequested = acceptHeader.contains("application/json") && !acceptHeader.contains("text/html");
         boolean htmlRequested = acceptHeader.contains("text/html") && !acceptHeader.contains("application/json");
-        
+
         if ((contentType != null && contentType.contains("application/json")) ||
                 (jsonRequested || (!htmlRequested && isJsonResponse(body)))) {
             try {
@@ -314,10 +191,10 @@ public class HttpClient {
             } catch (JSONException e) {
             }
         }
-        
+
         if (!isSearchRequest(urlString) &&
                 ((contentType != null && contentType.contains("text/html")) ||
-                (htmlRequested || (!jsonRequested && isHtmlResponse(body))))) {
+                        (htmlRequested || (!jsonRequested && isHtmlResponse(body))))) {
             Map<String, String> headerMap = new HashMap<>();
             String[] headerLines = headers.split("\r?\n");
             for (String header : headerLines) {
@@ -328,29 +205,29 @@ public class HttpClient {
                     headerMap.put(key, value);
                 }
             }
-            
+
             return "=== Headers ===\n" + formatHeaders(headerMap) + "\n\n=== Body ===\n" + HtmlParser.parseHtmlContent(body);
         }
-        
+
         return body;
     }
 
     private boolean isJsonResponse(String content) {
         String trimmed = content.trim();
-        return (trimmed.startsWith("{") && trimmed.endsWith("}")) || 
-               (trimmed.startsWith("[") && trimmed.endsWith("]"));
+        return (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+                (trimmed.startsWith("[") && trimmed.endsWith("]"));
     }
 
     private boolean isHtmlResponse(String content) {
         String trimmed = content.trim().toLowerCase();
-        return trimmed.startsWith("<!doctype html") || 
-               trimmed.startsWith("<html") || 
-               (trimmed.contains("<head") && trimmed.contains("<body"));
+        return trimmed.startsWith("<!doctype html") ||
+                trimmed.startsWith("<html") ||
+                (trimmed.contains("<head") && trimmed.contains("<body"));
     }
 
     private boolean isSearchRequest(String urlString) {
-        return urlString.contains("bing.com/search") || 
-               urlString.contains("google.com/search");
+        return urlString.contains("bing.com/search") ||
+                urlString.contains("google.com/search");
     }
 
     public String encodeUrl(String url) {

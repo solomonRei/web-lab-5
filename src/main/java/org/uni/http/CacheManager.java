@@ -38,6 +38,7 @@ public class CacheManager {
 
         CacheEntry entry = memoryCache.get(key);
         if (entry != null && !entry.isExpired()) {
+            System.out.println("test Cache is taken: " + entry);
             return entry;
         }
 
@@ -64,6 +65,7 @@ public class CacheManager {
         if (useFileCache) {
             try {
                 writeToFile(Paths.get(CACHE_DIR, key), entry);
+                System.out.println("put Cache: " + entry);
             } catch (IOException e) {
 
             }
@@ -80,6 +82,7 @@ public class CacheManager {
                 if (hex.length() == 1) hexString.append('0');
                 hexString.append(hex);
             }
+            System.out.println("Key generated");
             return hexString.toString();
         } catch (NoSuchAlgorithmException e) {
             return url.replaceAll("[^a-zA-Z0-9]", "_");
