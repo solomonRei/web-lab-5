@@ -102,5 +102,24 @@ public class CacheManager {
             return null;
         }
     }
+    
+    public void clearAll() {
+        memoryCache.clear();
 
+        if (useFileCache) {
+            File cacheDir = new File(CACHE_DIR);
+            if (cacheDir.exists() && cacheDir.isDirectory()) {
+                File[] cacheFiles = cacheDir.listFiles();
+                if (cacheFiles != null) {
+                    for (File file : cacheFiles) {
+                        if (file.isFile()) {
+                            file.delete();
+                        }
+                    }
+                }
+            }
+        }
+        
+        System.out.println("Cache cleared");
+    }
 } 

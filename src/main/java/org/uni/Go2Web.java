@@ -3,6 +3,7 @@ package org.uni;
 import org.uni.http.HttpClient;
 import org.uni.html.HtmlParser;
 import org.uni.search.SearchService;
+import org.uni.http.CacheManager;
 
 import java.util.List;
 
@@ -10,8 +11,10 @@ public class Go2Web {
     private final HttpClient httpClient;
     private final HtmlParser htmlParser;
     private final SearchService searchService;
+    private final CacheManager cacheManager;
 
     public Go2Web() {
+        this.cacheManager = new CacheManager(true);
         this.httpClient = new HttpClient(true);
         this.htmlParser = new HtmlParser();
         this.searchService = new SearchService();
@@ -87,6 +90,10 @@ public class Go2Web {
                     e.printStackTrace();
                 }
                 break;
+            case "-c":
+                cacheManager.clearAll();
+                System.out.println("Cache has been cleared successfully");
+                break;
             case "-h":
                 printHelp();
                 break;
@@ -101,6 +108,7 @@ public class Go2Web {
         System.out.println("\nUsage:");
         System.out.println("  go2web -u <URL> [-f <format>]  Make an HTTP request to the specified URL");
         System.out.println("  go2web -s <search term>        Search the web");
+        System.out.println("  go2web -c                      Clear the cache");
         System.out.println("  go2web -h                      Show this help message");
         System.out.println("\nFormat options:");
         System.out.println("  auto (default)                Automatically detect format from response");

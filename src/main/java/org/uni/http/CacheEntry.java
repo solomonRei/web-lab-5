@@ -1,8 +1,10 @@
 package org.uni.http;
 
+import java.io.Serializable;
 import java.time.Instant;
 
-public class CacheEntry {
+public class CacheEntry implements Serializable {
+    private static final long serialVersionUID = 1L;
     private final String content;
     private final String contentType;
     private final String etag;
@@ -29,5 +31,15 @@ public class CacheEntry {
 
     public boolean isExpired() {
         return Instant.now().toEpochMilli() > expirationTime;
+    }
+    
+    @Override
+    public String toString() {
+        return "CacheEntry{" +
+                "contentType='" + contentType + '\'' +
+                ", etag='" + etag + '\'' +
+                ", expirationTime=" + expirationTime +
+                ", expired=" + isExpired() +
+                '}';
     }
 } 
